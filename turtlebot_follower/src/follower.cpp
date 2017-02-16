@@ -84,6 +84,10 @@ private:
   double z_scale_; /**< The scaling factor for translational robot speed */
   double x_scale_; /**< The scaling factor for rotational robot speed */
   bool   enabled_; /**< Enable/disable following; just prevents motor commands */
+  int count;
+  bool rotate_;
+  double dir_;
+  int TURN_THRES = 300;
 
   // Service for start/stop following
   ros::ServiceServer switch_srv_;
@@ -122,6 +126,8 @@ private:
     dynamic_reconfigure::Server<turtlebot_follower::FollowerConfig>::CallbackType f =
         boost::bind(&TurtlebotFollower::reconfigure, this, _1, _2);
     config_srv_->setCallback(f);
+    rotate_=false;
+    count = 0;
   }
 
   void reconfigure(turtlebot_follower::FollowerConfig &config, uint32_t level)
@@ -193,7 +199,7 @@ private:
 
     //If there are points, find the centroid and calculate the command goal.
     //If there are no points, simply publish a stop goal.
-    if (n>1000)
+    if (n>4000)
     {
       x /= n;
       y /= n;
@@ -215,7 +221,7 @@ private:
         geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
         //cmd->linear.x = (z - goal_z_) * z_scale_;
 	
-        cmd->angular.z = 1;
+        cmd->angular.z = 2;
 	//ros::Duration(3.0).sleep();
 	ROS_INFO_THROTTLE(1, "angular.z: %f", cmd->angular.z);
 	cmdpub_.publish(cmd);
@@ -231,6 +237,20 @@ private:
         cmdpub_.publish(geometry_msgs::TwistPtr(new geometry_msgs::Twist()));
       }
     }
+
+    if(rotate_){
+	geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
+	cmd->angular.z = 2;
+        cmdpub_.publish(cmd);
+	count++;
+	ROS_INFO("count = %d", count);	
+	if(count > TURN_THRES)
+	{
+		ROS_INFO("set rotate to false");
+		rotate_ = false;
+		count = 0;
+	}
+    } 
 
     publishBbox();
   }
