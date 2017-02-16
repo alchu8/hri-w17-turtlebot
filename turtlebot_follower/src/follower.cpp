@@ -225,6 +225,7 @@ private:
 	//ros::Duration(3.0).sleep();
 	ROS_INFO_THROTTLE(1, "angular.z: %f", cmd->angular.z);
 	cmdpub_.publish(cmd);
+	rotate_ = true;
       }
     }
     else
