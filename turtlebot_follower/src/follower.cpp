@@ -86,8 +86,8 @@ private:
   bool   enabled_; /**< Enable/disable following; just prevents motor commands */
   int count;
   bool rotate_;
-  double dir_;
-  int TURN_THRES = 300;
+  int dir_;
+  int TURN_THRES = 200;
 
   // Service for start/stop following
   ros::ServiceServer switch_srv_;
@@ -128,6 +128,7 @@ private:
     config_srv_->setCallback(f);
     rotate_=false;
     count = 0;
+    dir_ = 1;
   }
 
   void reconfigure(turtlebot_follower::FollowerConfig &config, uint32_t level)
@@ -221,7 +222,7 @@ private:
         geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
         //cmd->linear.x = (z - goal_z_) * z_scale_;
 	
-        cmd->angular.z = 2;
+        cmd->angular.z = 2.5 * dir_;
 	//ros::Duration(3.0).sleep();
 	ROS_INFO_THROTTLE(1, "angular.z: %f", cmd->angular.z);
 	cmdpub_.publish(cmd);
@@ -230,6 +231,25 @@ private:
     }
     else
     {
+      if(rotate_){
+        double direction = ((double) rand() / (RAND_MAX));
+        geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
+        cmd->angular.z = 2.5 * dir_;
+        ROS_INFO("dir= %d", dir_);
+        cmdpub_.publish(cmd);
+        count++;
+        ROS_INFO("count = %d", count);
+        if(count > TURN_THRES)
+        {
+                if (direction > 0.5)
+                  dir_ = 1;
+                else
+                  dir_ = -1;
+                ROS_INFO("set rotate to false");
+                rotate_ = false;
+                count = 0;
+        }
+    }else{
       ROS_INFO_THROTTLE(1, "Not enough points(%d) detected, stopping the robot", n);
       publishMarker(x, y, z);
 
@@ -237,21 +257,28 @@ private:
       {
         cmdpub_.publish(geometry_msgs::TwistPtr(new geometry_msgs::Twist()));
       }
+}
     }
 
-    if(rotate_){
+ /*   if(rotate_){
+	double direction = ((double) rand() / (RAND_MAX));
 	geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
-	cmd->angular.z = 2;
+	cmd->angular.z = 2.5 * dir_;
+	ROS_INFO("dir= %d", dir_);
         cmdpub_.publish(cmd);
 	count++;
 	ROS_INFO("count = %d", count);	
 	if(count > TURN_THRES)
 	{
+        	if (direction > 0.5)
+           	  dir_ = 1;
+        	else
+            	  dir_ = -1;
 		ROS_INFO("set rotate to false");
 		rotate_ = false;
 		count = 0;
 	}
-    } 
+    }*/ 
 
     publishBbox();
   }
