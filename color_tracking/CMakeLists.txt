@@ -136,9 +136,9 @@ include_directories(
 # add_dependencies(color_tracking_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(color_tracking_node
-#   ${catkin_LIBRARIES}
-# )
+target_link_libraries(color_tracking_node
+  ${catkin_LIBRARIES}
+)
 
 #############
 ## Install ##
