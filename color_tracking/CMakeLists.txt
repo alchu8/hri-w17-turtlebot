@@ -128,7 +128,7 @@ include_directories(
 # add_dependencies(color_tracking ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
-#add_executable(color_tracking_node src/color_tracking_node.cpp)
+add_executable(color_tracking_node src/color_tracking_node.cpp)
 #add_executable(color_tracking src/main.cpp)
 
 ## Add cmake target dependencies of the executable
