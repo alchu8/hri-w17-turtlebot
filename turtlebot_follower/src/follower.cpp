@@ -89,6 +89,7 @@ private:
   bool rotate_;
   int dir_;
   int TURN_THRES = 200;
+  bool seesBlobs_;
 
   // Service for start/stop following
   ros::ServiceServer switch_srv_;
@@ -120,7 +121,7 @@ private:
     markerpub_ = private_nh.advertise<visualization_msgs::Marker>("marker",1);
     bboxpub_ = private_nh.advertise<visualization_msgs::Marker>("bbox",1);
     pub_msg = private_nh.advertise<geometry_msgs::Twist> ("cmd_vel", 1);
-    //sub_= nh.subscribe<sensor_msgs::Image>("depth/image_rect", 1, &TurtlebotFollower::imagecb, this);
+    sub_= nh.subscribe<sensor_msgs::Image>("depth/image_rect", 1, &TurtlebotFollower::imagecb, this);
     //colorsub_= nh.subscribe<geometry_msgs::Twist>("follower_velocity",1, &TurtlebotFollower::colorcb, this);
     blobsSubscriber = nh.subscribe("/blobs", 1, &TurtlebotFollower::blobsCallBack,this);
     switch_srv_ = private_nh.advertiseService("change_state", &TurtlebotFollower::changeModeSrvCb, this);
@@ -164,16 +165,29 @@ void blobsCallBack (const cmvision::Blobs& blobsIn)
 * Similarly, for yellow blob, blobsIn.blobs[i].red and blobsIn.blobs[i].green will be 255, and
 blobsIn.blobs[i].blue will be 0.
 ************************************************************/
-    geometry_msgs::Twist cmd_msg;
-    if( blobsIn.blob_count > 0) {
-        ROS_INFO("blob found");
-        cmd_msg.linear.x = 1;
-        pub_msg.publish(cmd_msg);
+/*    geometry_msgs::Twist cmd_msg;
+    
+   // if(false == seesObstacleFlag_)
+   // {
+	ROS_INFO("no obstacle");
+        if( blobsIn.blob_count > 0) {
+            ROS_INFO("blob found");
+            cmd_msg.linear.x = 1;
+            pub_msg.publish(cmd_msg);
+        }else{
+	    ROS_INFO("blob not found");
+    	    cmd_msg.linear.x = 0;
+	    pub_msg.publish(cmd_msg);
+        }
+    //}else{
+//	ROS_INFO("obstacle found");
+//    }*/
+    if(blobsIn.blob_count>0){
+	seesBlobs_ = true;
     }else{
-	ROS_INFO("blob not found");
-    	cmd_msg.linear.x = 0;
-	pub_msg.publish(cmd_msg);
+	seesBlobs_ = false;
     }
+
 }
 
 
@@ -243,13 +257,20 @@ blobsIn.blobs[i].blue will be 0.
      }
     }
 
+//     seesObstacleFlag_ = false;
+
     //If there are points, find the centroid and calculate the command goal.
     //If there are no points, simply publish a stop goal.
-    if (n>4000)
+    if (n>4000)//obstacle detected
     {
       x /= n;
       y /= n;
       ROS_INFO_THROTTLE(1, "goal_z_: %f", goal_z_);
+      
+     //seesObstacleFlag_ = true;
+
+/*
+      // Centroid too far.
       if(z > max_z_){
         ROS_INFO_THROTTLE(1, "Centroid too far away %f, stopping the robot\n", z);
         if (enabled_)
@@ -258,24 +279,38 @@ blobsIn.blobs[i].blue will be 0.
         }
         return;
       }
-
+*/
       ROS_INFO_THROTTLE(1, "Centroid at %f %f %f with %d points", x, y, z, n);
       publishMarker(x, y, z);
+
+
+      
 
       if (enabled_)
       {
         geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
         //cmd->linear.x = (z - goal_z_) * z_scale_;
 	
-        cmd->angular.z = 2.5 * dir_;
+//        cmd->angular.z = 2.5 * dir_;
 	//ros::Duration(3.0).sleep();
 	ROS_INFO_THROTTLE(1, "angular.z: %f", cmd->angular.z);
 	cmdpub_.publish(cmd);
-	rotate_ = true;
+//	rotate_ = true;
       }
     }
-    else
+    else// no obstacle
     {
+	if(seesBlobs_){
+	    ROS_INFO("blob found");
+	    geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
+	    cmd->linear.x = 1;
+	    cmdpub_.publish(cmd);	    
+        }else{
+	    ROS_INFO("blob not found");         
+            geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
+            cmdpub_.publish(cmd);
+	}
+/*
       if(rotate_){
         double direction = ((double) rand() / (RAND_MAX));
         geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
@@ -302,8 +337,8 @@ blobsIn.blobs[i].blue will be 0.
       {
         cmdpub_.publish(geometry_msgs::TwistPtr(new geometry_msgs::Twist()));
       }
-}
-    }
+    }*/
+  }
 
  /*   if(rotate_){
 	double direction = ((double) rand() / (RAND_MAX));
@@ -323,7 +358,7 @@ blobsIn.blobs[i].blue will be 0.
 		rotate_ = false;
 		count = 0;
 	}
-    }*/ 
+    } */
 
     publishBbox();
   }
