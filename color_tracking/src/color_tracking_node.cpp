@@ -1,6 +1,10 @@
 #include <cmvision/Blob.h>
 #include <cmvision/Blobs.h>
 #include "ros/ros.h"
+#include <geometry_msgs/Twist.h>
+
+ros::Publisher pub_msg;
+geometry_msgs::Twist cmd_msg;
 
 /************************************************************
 * Function Name: blobsCallBack
@@ -26,9 +30,12 @@ void blobsCallBack (const cmvision::Blobs& blobsIn)
 * Similarly, for yellow blob, blobsIn.blobs[i].red and blobsIn.blobs[i].green will be 255, and
 blobsIn.blobs[i].blue will be 0.
 ************************************************************/
-for (int i = 0; i < blobsIn.blob_count; i++) {
-ROS_INFO("blob found");
-}
+    ros::Rate rate(10);
+    for (int i = 0; i < blobsIn.blob_count; i++) {
+        ROS_INFO("blob found");
+	cmd_msg.linear.x = 1;
+	pub_msg.publish(cmd_msg);
+    }
 }
 int main(int argc, char **argv)
 {
@@ -36,5 +43,6 @@ ros::init(argc, argv, "color_tracking_node");
 ros::NodeHandle n ("~");
  //subscribe to /blobs topic
 ros::Subscriber blobsSubscriber = n.subscribe("/blobs", 100, blobsCallBack);
+pub_msg = n.advertise<geometry_msgs::Twist>("follower_velocity",1);
 ros::spin();
 }

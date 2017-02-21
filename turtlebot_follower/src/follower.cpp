@@ -37,7 +37,8 @@
 #include <stdlib.h>
 #include "dynamic_reconfigure/server.h"
 #include "turtlebot_follower/FollowerConfig.h"
-
+#include <cmvision/Blob.h>
+#include <cmvision/Blobs.h>
 #include <depth_image_proc/depth_traits.h>
 
 
@@ -118,8 +119,10 @@ private:
     cmdpub_ = private_nh.advertise<geometry_msgs::Twist> ("cmd_vel", 1);
     markerpub_ = private_nh.advertise<visualization_msgs::Marker>("marker",1);
     bboxpub_ = private_nh.advertise<visualization_msgs::Marker>("bbox",1);
-    sub_= nh.subscribe<sensor_msgs::Image>("depth/image_rect", 1, &TurtlebotFollower::imagecb, this);
-
+    pub_msg = private_nh.advertise<geometry_msgs::Twist> ("cmd_vel", 1);
+    //sub_= nh.subscribe<sensor_msgs::Image>("depth/image_rect", 1, &TurtlebotFollower::imagecb, this);
+    //colorsub_= nh.subscribe<geometry_msgs::Twist>("follower_velocity",1, &TurtlebotFollower::colorcb, this);
+    blobsSubscriber = nh.subscribe("/blobs", 1, &TurtlebotFollower::blobsCallBack,this);
     switch_srv_ = private_nh.advertiseService("change_state", &TurtlebotFollower::changeModeSrvCb, this);
 
     config_srv_ = new dynamic_reconfigure::Server<turtlebot_follower::FollowerConfig>(private_nh);
@@ -143,6 +146,48 @@ private:
     x_scale_ = config.x_scale;
   }
 
+void blobsCallBack (const cmvision::Blobs& blobsIn)
+{
+/************************************************************
+* These blobsIn.blobs[i].red, blobsIn.blobs[i].green, and blobsIn.blobs[i].blue values depend on the
+* values those are provided in the colos.txt file.
+* For example, the color file is like:
+*
+* [Colors]
+* (255, 0, 0) 0.000000 10 RED
+* (255, 255, 0) 0.000000 10 YELLOW
+* [Thresholds]
+* ( 127:187, 142:161, 175:197 )
+* ( 47:99, 96:118, 162:175 )
+*
+* Now, if a red blob is found, then the blobsIn.blobs[i].red will be 255, and the others will be 0.
+* Similarly, for yellow blob, blobsIn.blobs[i].red and blobsIn.blobs[i].green will be 255, and
+blobsIn.blobs[i].blue will be 0.
+************************************************************/
+    geometry_msgs::Twist cmd_msg;
+    if( blobsIn.blob_count > 0) {
+        ROS_INFO("blob found");
+        cmd_msg.linear.x = 1;
+        pub_msg.publish(cmd_msg);
+    }else{
+	ROS_INFO("blob not found");
+    	cmd_msg.linear.x = 0;
+	pub_msg.publish(cmd_msg);
+    }
+}
+
+
+
+  void colorcb(const geometry_msgs::TwistConstPtr & color_msg){
+      geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
+        //cmd->linear.x = (z - goal_z_) * z_scale_;
+
+        cmd->linear.x = color_msg->linear.x;
+        //ros::Duration(3.0).sleep();
+        ROS_INFO_THROTTLE(1, "angular.z: %f", cmd->angular.z);
+        cmdpub_.publish(cmd);
+
+  }
   /*!
    * @brief Callback for point clouds.
    * Callback for depth images. It finds the centroid
@@ -363,8 +408,10 @@ private:
     //only if using a MESH_RESOURCE marker type:
     bboxpub_.publish( marker );
   }
-
+  ros::Subscriber blobsSubscriber;
   ros::Subscriber sub_;
+  ros::Subscriber colorsub_;
+  ros::Publisher pub_msg;
   ros::Publisher cmdpub_;
   ros::Publisher markerpub_;
   ros::Publisher bboxpub_;
