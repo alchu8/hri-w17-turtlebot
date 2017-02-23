@@ -88,8 +88,9 @@ namespace turtlebot_follower
             int count;
             bool rotate_;
             int dir_;
-            int TURN_THRES = 10;
+            int TURN_THRES = 90;
             bool seesBlobs_;
+            bool seesObstacle_;
 
             // Service for start/stop following
             ros::ServiceServer switch_srv_;
@@ -133,6 +134,7 @@ namespace turtlebot_follower
                 rotate_=false;
                 count = 0;
                 dir_ = 1;
+                seesObstacle_ = false;
             }
 
             void reconfigure(turtlebot_follower::FollowerConfig &config, uint32_t level)
@@ -165,23 +167,6 @@ namespace turtlebot_follower
                  * Similarly, for yellow blob, blobsIn.blobs[i].red and blobsIn.blobs[i].green will be 255, and
                  blobsIn.blobs[i].blue will be 0.
                  ************************************************************/
-                /*    geometry_msgs::Twist cmd_msg;
-
-                // if(false == seesObstacleFlag_)
-                // {
-                ROS_INFO("no obstacle");
-                if( blobsIn.blob_count > 0) {
-                ROS_INFO("blob found");
-                cmd_msg.linear.x = 1;
-                pub_msg.publish(cmd_msg);
-                }else{
-                ROS_INFO("blob not found");
-                cmd_msg.linear.x = 0;
-                pub_msg.publish(cmd_msg);
-                }
-                //}else{
-                //	ROS_INFO("obstacle found");
-                //    }*/
                 if(blobsIn.blob_count>0){
                     seesBlobs_ = true;
                 }else{
@@ -194,10 +179,8 @@ namespace turtlebot_follower
 
             void colorcb(const geometry_msgs::TwistConstPtr & color_msg){
                 geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
-                //cmd->linear.x = (z - goal_z_) * z_scale_;
 
                 cmd->linear.x = color_msg->linear.x;
-                //ros::Duration(3.0).sleep();
                 ROS_INFO_THROTTLE(1, "angular.z: %f", cmd->angular.z);
                 cmdpub_.publish(cmd);
 
@@ -213,7 +196,7 @@ namespace turtlebot_follower
             {
 
                 // Precompute the sin function for each row and column
-                uint32_t image_width = (depth_msg->width);
+                uint32_t image_width = 0.5*(depth_msg->width);
                 float x_radians_per_pixel = 60.0/57.0/image_width;
                 float sin_pixel_x[image_width];
                 for (int x = 0; x < image_width; ++x) {
@@ -257,62 +240,61 @@ namespace turtlebot_follower
                     }
                 }
 
-                //     seesObstacleFlag_ = false;
-
                 //If there are points, find the centroid and calculate the command goal.
                 //If there are no points, simply publish a stop goal.
-                if (n>4000)//obstacle detected
+                if (n>3000 || seesObstacle_) //obstacle detected
                 {
                     x /= n;
                     y /= n;
-                    ROS_INFO_THROTTLE(1, "goal_z_: %f", goal_z_);
+//                    ROS_INFO("goal_z_: %f", goal_z_);
 
-                    ROS_INFO_THROTTLE(1, "Centroid at %f %f %f with %d points", x, y, z, n);
+//                    ROS_INFO("Centroid at %f %f %f with %d points", x, y, z, n);
                     publishMarker(x, y, z);
 
                     // obstacle detected.
                     if (enabled_)
                     {
-                        // obstacle & doesnt sees blob
+                        // obstacle is not goal, go around
                         if(!seesBlobs_){
-                            if(count < TURN_THRES ){
+                            seesObstacle_ = true;
+                            if(count < TURN_THRES ){ // turn left
                                 geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
-                                //cmd->linear.x = (z - goal_z_) * z_scale_;
-                                cmd->angular.z = 0.5;
-                                //ros::Duration(3.0).sleep();
+                                cmd->angular.z = 0.6;
                                 ROS_INFO_THROTTLE(1, "angular.z: %f", cmd->angular.z);
                                 cmdpub_.publish(cmd);
-                                //	        rotate_ = true;
                                 count++;
                                 ROS_INFO("count: %d",count);
-                            }else if(count < 2 * TURN_THRES){ 
-                                //count = 0;
+                            }else if(count < 2 * TURN_THRES){ // move forward
                                 ROS_INFO("count > 2*TURN_THRES");
                                 geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
-                                cmd->linear.x = 0.5;
+                                cmd->linear.x = 0.3;
                                 cmdpub_.publish(cmd);
                                 count++;
-                            }else{
+                            }
+                            else{//at this time, obstacle should be out of its sight
                                 ROS_INFO("reset count");
+                                seesObstacle_ = false;
                                 count = 0;
                                 geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
                                 cmdpub_.publish(cmd);
                             }
-                        }else{
+                        }else{ // obstacle = goal
+                            ROS_INFO("reached goal");
                             geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
                             cmdpub_.publish(cmd);
                         }
                     }
                 }
-                else// no obstacle
+                else // no obstacle
                 {
-                    if(seesBlobs_){
+                    if(seesBlobs_){ // goal found, move toward goal
+                        count = 0;
                         ROS_INFO("blob found");
                         geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
                         cmd->linear.x = 0.5;
                         cmdpub_.publish(cmd);
 
-                    }else{
+                    }else{ // initial state, rotate to find goal
                         ROS_INFO("blob not found");         
                         geometry_msgs::TwistPtr cmd(new geometry_msgs::Twist());
                         cmd->angular.z = 0.5;
