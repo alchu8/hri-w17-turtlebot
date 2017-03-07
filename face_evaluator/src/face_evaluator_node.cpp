@@ -82,9 +82,6 @@ public:
       ROS_ERROR("\nexception thrown! %s\n", e.what());
       return;
     }
-    // Draw an example circle on the video stream
-    //if (cv_ptr->image.rows > 60 && cv_ptr->image.cols > 60)
-    //  cv::circle(cv_ptr->image, cv::Point(50, 50), 10, CV_RGB(0,0,255));
 
     // Update GUI Window
     //cv::imshow(OPENCV_WINDOW, cv_ptr->image);
@@ -99,7 +96,7 @@ int main(int argc, char** argv)
 {
   if (argc == 1)
   {
-    ROS_ERROR("Please enter shape predictor.\n");
+    ROS_ERROR("Please enter shape predictor as a command line argument.\n");
     return 0;
   }
   deserialize(argv[1]) >> sp_;
