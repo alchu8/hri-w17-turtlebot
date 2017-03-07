@@ -5,6 +5,11 @@ import roslib
 import rospy
 import smach
 import smach_ros
+import speak
+from std_msgs.msg import Int32
+
+def callback(data):
+    rospy.loginfo("I heard %d", data.data)
 
 # define state Foo
 class Foo(smach.State):
@@ -13,9 +18,10 @@ class Foo(smach.State):
         self.counter = 0
 
     def execute(self, userdata):
-        rospy.loginfo('Executing state FOO')
-        if self.counter < 3:
-            self.counter += 1
+	rospy.loginfo('Executing state FOO')
+	rospy.loginfo('would you like to hear a joke?')
+	ans = raw_input()
+        if ans == 'yes':
             return 'outcome1'
         else:
             return 'outcome2'
@@ -27,28 +33,12 @@ class Bar(smach.State):
         smach.State.__init__(self, outcomes=['outcome1'])
 
     def execute(self, userdata):
-    	from sound_play.msg import SoundRequest
-    	from sound_play.libsoundplay import SoundClient
-
-    	# Ordered this way to minimize wait time.
-    	soundhandle = SoundClient()
-    	rospy.sleep(1)
-    	#soundhandle.say('Take me to your leader.','')
-    	voice = 'voice_kal_diphone'
-    	volume = 100.0
-	s = 'Hello'
-    	print 'Saying: %s' % s
-    	print 'Voice: %s' % voice
-
-    	soundhandle.say(s, voice)
-    	rospy.sleep(1)
-	
+	joke_length = speak.speak_func()
+	sub = rospy.Subscriber("chatter", Int32, callback)
+	rospy.sleep(joke_length*0.5)
+	sub.unregister()
         rospy.loginfo('Executing state BAR')
         return 'outcome1'
-        
-
-
-
 
 def main():
     rospy.init_node('smach_example_state_machine')
