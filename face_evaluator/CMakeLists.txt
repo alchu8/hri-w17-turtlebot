@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(face_evaluator)
-
+include(/home/user/dlib/dlib/cmake)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -140,7 +140,7 @@ include_directories(
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(face_evaluator_node
-   ${catkin_LIBRARIES} ${OpenCV_LIBS}
+   ${catkin_LIBRARIES} ${OpenCV_LIBS} dlib
  )
 
 #############
