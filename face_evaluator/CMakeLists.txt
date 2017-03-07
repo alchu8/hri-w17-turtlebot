@@ -140,7 +140,7 @@ include_directories(
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(face_evaluator_node
-   ${catkin_LIBRARIES}
+   ${catkin_LIBRARIES} ${OpenCV_LIBS}
  )
 
 #############
