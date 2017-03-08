@@ -12,9 +12,12 @@
 #include <dlib/image_io.h>
 #include <dlib/opencv.h>
 #include <iostream>
+#include <dirent.h>
 
 using namespace dlib;
 using namespace std;
+
+#define REF_SIZE 10
 
 //static const std::string OPENCV_WINDOW = "Image window";
 shape_predictor sp_; // give shape_predictor_68_face_landmarks.dat in command line
@@ -27,10 +30,11 @@ class ImageConverter
   image_transport::Publisher image_pub_;
   frontal_face_detector detector_;
   image_window win_;
+  std::vector<full_object_detection> templates_; // basis set
   
 public:
   ImageConverter()
-    : it_(nh_)
+    : it_(nh_), templates_(REF_SIZE)
   {
     detector_ = get_frontal_face_detector();
     // Subscrive to input video feed and publish output video feed
@@ -44,6 +48,43 @@ public:
   ~ImageConverter()
   {
     //cv::destroyWindow(OPENCV_WINDOW);
+  }
+
+  void initTemplates(char* templatesPath)
+  {
+    DIR *dir;
+    struct dirent *ent;
+    if ((dir = opendir (templatesPath)) != NULL) 
+    {
+      dlib::array<array2d<bgr_pixel>> face_chips(REF_SIZE);
+      /* print all the files and directories within directory */
+      while ((ent = readdir (dir)) != NULL) 
+      {
+        //printf ("%s\n", ent->d_name);
+        unsigned long index = ent->d_name[0] - '0'; // index of reference image
+        load_image(face_chips[index], ent->d_name);
+        std::vector<rectangle> faces = detector_(face_chips[index]);
+        // shape predictor generates 68 facial landmarks (iBUG 300-W scheme)
+        full_object_detection shape = sp_(face_chips[index], faces[0]);
+        templates_[index] = shape;
+      }
+      closedir (dir);
+      // draw each reference image
+      for (unsigned long i = 0; i < face_chips.size(); ++i)
+      {
+        for (unsigned long j = 1; j < templates_[i].num_parts(); ++j)
+        {
+          dlib::draw_line(face_chips[i], templates_[i].part(j-1), templates_[i].part(j), dlib::bgr_pixel(0,255,0));
+        }
+      }
+      image_window win_faces;
+      win_faces.set_image(tile_images(face_chips));
+      save_png(tile_images(face_chips), "~/references.png");
+    } 
+    else 
+    {
+      ROS_ERROR("could not open directory\n");
+    }
   }
 
   void imageCb(const sensor_msgs::ImageConstPtr& msg)
@@ -94,14 +135,15 @@ public:
 
 int main(int argc, char** argv)
 {
-  if (argc == 1)
+  if (argc < 3)
   {
-    ROS_ERROR("Please enter shape predictor as a command line argument.\n");
+    ROS_ERROR("Usage: rosrun face_evaluator face_evaluator_node shape_predictor_68_face_landmarks.dat templatesFolder\n");
     return 0;
   }
   deserialize(argv[1]) >> sp_;
   ros::init(argc, argv, "image_converter");
   ImageConverter ic;
+  ic.initTemplates(argv[2]);
   ros::spin();
   return 0;
 }
