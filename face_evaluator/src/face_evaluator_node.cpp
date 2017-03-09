@@ -123,8 +123,14 @@ public:
 
   int computeExpression(full_object_detection shape)
   {
-    ROS_INFO("difference: %d", abs(shape.part(49).y - shape.part(55).y));
-    if(abs(shape.part(49).y - shape.part(55).y) > 0)
+    //ROS_INFO("type: %s", typeid(shape.part(49).y()).name());
+    int difference_ = abs(shape.part(49).y() - shape.part(55).y());
+    ROS_INFO("difference: %d", difference_);
+    if(difference_ > 15)
+    {
+      return 2;
+    }
+    else if(difference_ > 10 && difference_ <= 15)
     {
       return 1;
     }
