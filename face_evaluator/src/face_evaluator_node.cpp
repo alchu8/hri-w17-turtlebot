@@ -1,7 +1,7 @@
 //#define DLIB_JPEG_SUPPORT
-//#undef DLIB_PNG_SUPPORT
 #define DLIB_PNG_SUPPORT
 #include <ros/ros.h>
+#include <std_msgs/Int8.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
@@ -12,27 +12,19 @@
 #include <dlib/image_processing/render_face_detections.h>
 #include <dlib/image_processing.h>
 #include <dlib/image_transforms.h>
-//#ifdef DLIB_JPEG_STATIC
-//#include <dlib/external/libjpeg/jpeglib.h>
-//#else
-//#include <jpeglib.h>
-//#endif
 #include <dlib/gui_widgets.h>
 #include <dlib/image_io.h>
 #include <dlib/opencv.h>
 #include <iostream>
 #include <dirent.h>
-#include <chrono>
-#include <ctime>
 #include <cmath>
 
 using namespace dlib;
 using namespace std;
-//using namespace cv;
 
 #define REF_SIZE 10
 
-static const std::string OPENCV_WINDOW = "Image window";
+//static const std::string OPENCV_WINDOW = "Image window";
 shape_predictor sp_; // give shape_predictor_68_face_landmarks.dat in command line
 
 class ImageConverter
@@ -41,21 +33,23 @@ class ImageConverter
   image_transport::ImageTransport it_;
   image_transport::Subscriber image_sub_;
   image_transport::Publisher image_pub_;
+  ros::Publisher expression_pub_;
   frontal_face_detector detector_;
   image_window win_;
   std::vector<full_object_detection> templates_; // basis set
-  int countTime;
+  //int countTime;
   
 public:
   ImageConverter()
     : it_(nh_)//, templates_(REF_SIZE)
   {
     detector_ = get_frontal_face_detector();
-    countTime = 0;
+    //countTime = 0;
     // Subscrive to input video feed and publish output video feed
     image_sub_ = it_.subscribe("/camera/rgb/image_raw", 1, 
       &ImageConverter::imageCb, this);
     image_pub_ = it_.advertise("/image_converter/output_video", 1);
+    expression_pub_ = nh_.advertise<std_msgs::Int8>("/face_evaluator/expression", 1);
 
     //cv::namedWindow(OPENCV_WINDOW);
   }
@@ -82,14 +76,11 @@ public:
         }
         unsigned long index = ent->d_name[0] - '0'; // index of reference image
         //load_jpeg(face_chips[index], ent->d_name);
-        cv::Mat matImg = cv::imread(ent->d_name, 0);
+        cv::Mat matImg = cv::imread(ent->d_name, 0); // grayscale
         cv_image<unsigned char> cimg(matImg);
         assign_image(face_chips[index], cimg);
         pyramid_up(face_chips[index]);
         std::vector<rectangle> faces = detector_(face_chips[index]);
-        //cv::imshow(OPENCV_WINDOW, matImg);
-        //cv::waitKey(3);
-        // shape predictor generates 68 facial landmarks (iBUG 300-W scheme)
         if(faces.size() == 0) {
           ROS_ERROR("no faces detected for %s!!!\n", ent->d_name);
           continue;
@@ -98,8 +89,8 @@ public:
           ROS_INFO("Number of faces detected: %d for %s\n", faces.size(), ent->d_name);
         }
         
+        // shape predictor generates 68 facial landmarks (iBUG 300-W scheme)
         full_object_detection shape = sp_(face_chips[index], faces[0]);
-        
         templates_[index] = shape;
       }
       closedir (dir);
@@ -161,21 +152,24 @@ public:
         // shape predictor generates 68 facial landmarks (iBUG 300-W scheme)
         full_object_detection shape = sp_(cimg, faces[j]);
         shapes.push_back(shape);
-        ROS_INFO("expression %d\n", computeExpression(shape));
+        std_msgs::Int8 expression_;
+        expression_.data = computeExpression(shape);
+        ROS_INFO("expression %d\n", expression_.data);
+        expression_pub_.publish(expression_);
         //templates_.push_back(shape);
-        //save_png(cimg, to_string(countTime)+"_org");
-        // draw overlay
+        //save_png(cimg, to_string(countTime)+"_org.png");
+        // draw overlay on cimg
         /*for (unsigned long i = 1; i < shape.num_parts(); ++i)
         {
           dlib::draw_line(cimg, shape.part(i-1), shape.part(i), dlib::bgr_pixel(0,255,0));
         }*/
-        //std::ofstream fout(to_string(countTime) + ".dat", std::ios::binary);
-        //save_png(cimg, to_string(countTime));
+        //std::ostream fout(to_string(countTime) + ".dat", std::ios::binary);
+        //save_png(cimg, to_string(countTime)+".png");
         //countTime++;
         //dlib::serialize(shape, fout);
         //fout.close();
       }
-      cv_ptr->image = toMat(cimg); // converts dlib image back to cv::Mat
+      //cv_ptr->image = toMat(cimg); // converts dlib image back to cv::Mat
       win_.clear_overlay();
       win_.set_image(cimg);
       // convert into contour overlays for visualizations
@@ -192,7 +186,7 @@ public:
     //cv::waitKey(3);
     
     // Output modified video stream
-    image_pub_.publish(cv_ptr->toImageMsg());
+    //image_pub_.publish(cv_ptr->toImageMsg());
   }
 };
 
