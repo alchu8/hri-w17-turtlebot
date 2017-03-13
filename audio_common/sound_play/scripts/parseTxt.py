@@ -1,9 +1,10 @@
 
 
+
 def parse():
 	joke=[]
 	##open the file with read only permit
-	f = open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/jokes.txt')
+	f = open('/home/turtlebot/turtlebot_ws/src/alchu8/audio_common/sound_play/scripts/jokes.txt')
 	## Read the first line 
 	line = f.readline()
 
