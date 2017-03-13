@@ -6,13 +6,14 @@ import rospy
 import smach
 import smach_ros
 import speak
-from std_msgs.msg import Int32, String
+from std_msgs.msg import Int8, String
 from geometry_msgs.msg import Twist
 
 aveResponse = []
 ans = ''
 
 def listener_callback(data):
+    global ans
     rospy.loginfo("enter listener_callback: %s", data.data)
     ans = data.data
 
@@ -29,13 +30,15 @@ class Start(smach.State):
     def execute(self, userdata):
 	global ans
         rospy.loginfo('Executing state Start')
+	rospy.loginfo('ans before asking: %s', ans)
 	rospy.loginfo('would you like to hear a joke?')
 #	ans = raw_input()
 
 	listener = rospy.Subscriber("/recognizer/output", String, listener_callback)
 	rospy.loginfo('hear a joke? %s', ans)
-	rospy.sleep(5)	
-        if ans == 'yes' or 'ok':
+	rospy.sleep(5)
+        listener.unregister()	
+        if ans == 'yes' or ans == 'ok':
 	    ans = ''
             return 'outcome1'
         else:
@@ -50,12 +53,12 @@ class TellJokes(smach.State):
     def execute(self, userdata):
 	global aveResponse
 	joke_length = speak.speak_func()
-	sub = rospy.Subscriber("chatter", Int32, callback)
+	sub = rospy.Subscriber("face_evaluator/expression", Int8, callback)
 	rospy.sleep(joke_length*0.5)
 	sub.unregister()
         rospy.loginfo('Executing state TellJokes')
 	rospy.loginfo('length: %d', len(aveResponse))
-	if sum(aveResponse)*1.0/len(aveResponse) > 3:
+	if sum(aveResponse)*1.0/len(aveResponse) > 1:
 	    aveResponse = []
             return 'happy'
 	else:
