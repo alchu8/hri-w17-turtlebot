@@ -6,10 +6,15 @@ import rospy
 import smach
 import smach_ros
 import speak
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, String
 from geometry_msgs.msg import Twist
 
 aveResponse = []
+ans = ''
+
+def listener_callback(data):
+    rospy.loginfo("enter listener_callback: %s", data.data)
+    ans = data.data
 
 def callback(data):
     rospy.loginfo('%d', data.data)
@@ -22,12 +27,19 @@ class Start(smach.State):
         self.counter = 0
 
     def execute(self, userdata):
-	rospy.loginfo('Executing state Start')
+	global ans
+        rospy.loginfo('Executing state Start')
 	rospy.loginfo('would you like to hear a joke?')
-	ans = raw_input()
-        if ans == 'yes':
+#	ans = raw_input()
+
+	listener = rospy.Subscriber("/recognizer/output", String, listener_callback)
+	rospy.loginfo('hear a joke? %s', ans)
+	rospy.sleep(5)	
+        if ans == 'yes' or 'ok':
+	    ans = ''
             return 'outcome1'
         else:
+	    ans = ''
             return 'outcome2'
 
 # define state Bar
