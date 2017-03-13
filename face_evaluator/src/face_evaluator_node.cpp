@@ -132,27 +132,33 @@ public:
     }
   }
 
-  int computeExpression(full_object_detection shape, cv::Mat depthImg)
+  int computeExpression(full_object_detection shape, float depth_)
   {
-    int difference_ = abs(shape.part(49).y() - shape.part(55).y());
     int midLipDist_ = abs(shape.part(62).y() - shape.part(66).y());
+    int innerBrowDist_ = abs(shape.part(21).x() - shape.part(22).x());
+    int lipCornerDist_ = abs(shape.part(48).x() - shape.part(54).x());
     //ROS_INFO("mid lip difference: %d", midLipDist_);
-    unsigned short val = depthImg.at<unsigned short>(shape.part(30).y(), shape.part(30).x());
-    int depth_ = static_cast<int>(val); // depth in mm
-    if(depth_ == 0)
+    depth_ /= 1000; // depth in m
+    ROS_INFO("depth: %.3f\n", depth_);
+    float midLipDist_thres = 10/depth_;
+    float innerBrowDist_thres = 8.5/depth_;
+    if(innerBrowDist_ <= innerBrowDist_thres && midLipDist_ > midLipDist_thres)
     {
-      depth_ = 440; // closest range
+      return 0; // shock/disgust
     }
-    ROS_INFO("depth: %d\n", depth_);
-    if(midLipDist_ > 20)
+    else if(innerBrowDist_ <= innerBrowDist_thres)
     {
-      return 2;
+      return 1; // frown
     }
-    else if(midLipDist_ > 10 && midLipDist_ <= 20)
+    else if(midLipDist_ > midLipDist_thres)
     {
-      return 1;
+      return 4; // laugh
     }
-    return 0;
+    else if(midLipDist_ > midLipDist_thres/2 && midLipDist_ <= midLipDist_thres)
+    {
+      return 3; // teeth smile
+    }
+    return 2; // neutral
   }
 
   void imageCb(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::ImageConstPtr& depth_msg)
@@ -173,15 +179,26 @@ public:
     try
     {
       cv_image<bgr_pixel> cimg(cv_ptr->image); // dlib wrapper for cv::Mat object
-      cv_image<unsigned short> dimg(depth_ptr->image);
-      //pyramid_up(cimg); // upsample
+      //cv_image<unsigned short> dimg(depth_ptr->image);
       std::vector<rectangle> faces = detector_(cimg); // detected bounding boxes
       std::vector<full_object_detection> shapes; // pose of each face
+      int min_depth_ = INT_MAX;
       for (unsigned long j = 0; j < faces.size(); ++j)
       {
         // shape predictor generates 68 facial landmarks (iBUG 300-W scheme)
         full_object_detection shape = sp_(cimg, faces[j]);
-        shapes.push_back(shape);
+        unsigned short val = (depth_ptr->image).at<unsigned short>(shape.part(30).y(), shape.part(30).x());
+        if(val == 0)
+        {
+          val = 440; // closest range
+        }
+        int depth_ = static_cast<int>(val); // depth of shape in mm
+        if(depth_ < min_depth_)
+        {
+          min_depth_ = depth_;
+          shapes.clear();
+          shapes.push_back(shape); // only consider closest face
+        }
 //        dlib::draw_solid_circle(cimg, shape.part(48), 5, dlib::bgr_pixel(255,0,0)); //outer lip: left corner
 //        dlib::draw_solid_circle(cimg, shape.part(49), 5, dlib::bgr_pixel(255,0,0)); //outer lip: upper left
 //        dlib::draw_solid_circle(cimg, shape.part(50), 5, dlib::bgr_pixel(255,0,0)); //outer lip: left upper middle
@@ -198,10 +215,8 @@ public:
 //        dlib::draw_solid_circle(cimg, shape.part(62), 5, dlib::bgr_pixel(0,0,255)); //inner lip: upper middle
 //        dlib::draw_solid_circle(cimg, shape.part(66), 5, dlib::bgr_pixel(0,0,255)); //inner lip: lower middle
 //        dlib::draw_solid_circle(cimg, shape.part(30), 5, dlib::bgr_pixel(0,0,255)); //nose tip
-        std_msgs::Int8 expression_;
-        expression_.data = computeExpression(shape, depth_ptr->image);
-        ROS_INFO("expression %d\n", expression_.data);
-        expression_pub_.publish(expression_);
+//        dlib::draw_solid_circle(cimg, shape.part(21), 5, dlib::bgr_pixel(0,0,255)); //left brow: inner
+//        dlib::draw_solid_circle(cimg, shape.part(22), 5, dlib::bgr_pixel(0,0,255)); //right brow: inner
         //templates_.push_back(shape);
         //save_png(cimg, to_string(countTime)+"_org.png");
         // draw overlay on cimg
@@ -214,6 +229,13 @@ public:
         //countTime++;
         //dlib::serialize(shape, fout);
         //fout.close();
+      }
+      if(!shapes.empty())
+      {
+        std_msgs::Int8 expression_;
+        expression_.data = computeExpression(shapes[0], min_depth_);
+        ROS_INFO("expression %d\n", expression_.data);
+        expression_pub_.publish(expression_);
       }
       //cv_ptr->image = toMat(cimg); // converts dlib image back to cv::Mat
       win_.clear_overlay();
@@ -241,7 +263,7 @@ int main(int argc, char** argv)
 {
   if (argc < 2)
   {
-    ROS_ERROR("\nUsage: rosrun face_evaluator face_evaluator_node shape_predictor_68_face_landmarks.dat\n");
+    ROS_ERROR("\nUsage: rosrun face_evaluator face_evaluator_node /path/shape_predictor_68_face_landmarks.dat\n");
     return 0;
   }
   deserialize(argv[1]) >> sp_;
