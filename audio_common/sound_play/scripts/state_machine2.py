@@ -20,9 +20,9 @@ ans = ''
 new_pub = rospy.Publisher("new_person", Int8, queue_size=10)
 msg = Int8()
 
-# camera callback 
+# camera callback
 def cam_callback(data):
-    new_pub.publish(msg)   
+    new_pub.publish(msg)
 
 # callback function for speech recognition
 def listener_callback(data):
@@ -56,9 +56,9 @@ class Start(smach.State):
 	while ans == '':
 	    rospy.sleep(2)
 	# Once get the answer from speech recognizer, no need to subscribe
-        listener.unregister()	
+        listener.unregister()
         if ans == 'yes' or ans == 'ok':
-	    # When the target answers yes or ok, face evaluator will know there's a person 
+	    # When the target answers yes or ok, face evaluator will know there's a person
 	    msg.data = 1
 	    rospy.loginfo('%d\n', msg.data)
 	    ans = ''
@@ -117,9 +117,9 @@ class Happy(smach.State):
 	    self.cmd_vel_pub.publish(self.move_cmd)
 	self.move_cmd.angular.z = 0
 	self.cmd_vel_pub.publish(self.move_cmd)
-	
+
 	# Load happy image on screen for avatar.
-	webbrowser.open('home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/script/happy.png')	
+	webbrowser.open('home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/happy.png')
 
 	return 'outcome1'
 
@@ -145,7 +145,7 @@ class Sad(smach.State):
 
         self.move_cmd.angular.z = 0
         self.cmd_vel_pub.publish(self.move_cmd)
-        
+
 	# Load sad image on screen for avatar.
 	webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/sad.png')
 
@@ -165,9 +165,9 @@ def main():
     # Open the container
     with sm:
         # Add states to the container
-        smach.StateMachine.add('Start', Start(), 
+        smach.StateMachine.add('Start', Start(),
                                transitions={'outcome1':'TellJokes', 'outcome2':'outcome4'})
-        smach.StateMachine.add('TellJokes', TellJokes(), 
+        smach.StateMachine.add('TellJokes', TellJokes(),
                                transitions={'happy':'Happy','sad':'Sad'})
 	smach.StateMachine.add('Happy', Happy(),
 			       transitions={'outcome1':'Start'})
