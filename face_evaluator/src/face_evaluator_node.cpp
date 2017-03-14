@@ -1,4 +1,13 @@
-//#define DLIB_JPEG_SUPPORT
+/******************************************************************************
+ * File: face_evaluator_node.cpp
+ * Author: Albert Chu
+ * Email: alchu8@gmail.com
+ * Description: This node detects a face and evaluates an expression score 
+ * based on the degree of difference between the current frame and a reference 
+ * frame with neutral expression. This node subscribes to RGB and depth from 
+ * the camera node; it also subscribes to interaction information from 
+ * sound_play node. Finally, it publishes an expression score. 
+ *****************************************************************************/
 #define DLIB_PNG_SUPPORT
 #include <ros/ros.h>
 #include <std_msgs/Int8.h>
@@ -39,9 +48,6 @@ typedef message_filters::Subscriber<sensor_msgs::Image> image_sub_type;
 class ImageConverter
 {
   ros::NodeHandle nh_;
-  //image_transport::ImageTransport it_;
-  //image_transport::Subscriber image_sub_;
-  //image_transport::Publisher image_pub_;
   message_filters::Subscriber<Image> *rgb_sub_;
   message_filters::Subscriber<Image> *depth_sub_;
   message_filters::Synchronizer<MySyncPolicy>* my_sync_;
@@ -50,26 +56,22 @@ class ImageConverter
   frontal_face_detector detector_;
   image_window win_;
   std::vector<full_object_detection> templates_; // basis set
-  int interaction_;
-  full_object_detection *neutralShape_;
+  int interaction_; // flag for new user, 1 or 0
+  full_object_detection *neutralShape_; // reference shape for each interaction user
   //int countTime;
   
 public:
   ImageConverter()
-    //: it_(nh_), templates_(REF_SIZE)
   {
     detector_ = get_frontal_face_detector();
     //countTime = 0;
-    // Subscribe to input video feed and publish output video feed
+    // Subscribe to input video feed and sync RGB and depth
     int queueSize = 10;
     rgb_sub_ = new image_sub_type(nh_, "/camera/rgb/image_raw", queueSize);
     depth_sub_ = new image_sub_type(nh_, "/camera/depth/image_raw", queueSize);
-    my_sync_ = new message_filters::Synchronizer<MySyncPolicy>(MySyncPolicy(queueSize),  *rgb_sub_, *depth_sub_);
+    my_sync_ = new message_filters::Synchronizer<MySyncPolicy>(MySyncPolicy(queueSize), *rgb_sub_, *depth_sub_);
     my_sync_->registerCallback(boost::bind(&ImageConverter::imageCb, this, _1, _2));
-
-    /*image_sub_ = it_.subscribe("/camera/rgb/image_raw", 1, 
-      &ImageConverter::imageCb, this);
-    image_pub_ = it_.advertise("/image_converter/output_video", 1);*/
+    // subscribe to detect new user and publish expression score
     expression_pub_ = nh_.advertise<std_msgs::Int8>("/face_evaluator/expression", 1);
     interaction_sub_ = nh_.subscribe("/new_person", 10, &ImageConverter::interactionCb, this);
     interaction_ = 0;
@@ -84,17 +86,27 @@ public:
     delete my_sync_;
     delete rgb_sub_;
     delete depth_sub_;
-//    delete neutralShape_;
   }
 
+  /****************************************************************************
+   * Function: initTemplates (NOT USED)
+   * Parameters: templatesPath - path to the templates folder containing 
+   * references images for basis expressions.
+   * Description: Extracts a shape object for each reference face and store 
+   * them in templates_ vector. The index of each shape element in the vector 
+   * will correspond to the expression score for each respective shape. Thus,
+   * this sets up the basis set for which to compare all other faces against.
+   * Returns: Nothing.
+   ***************************************************************************/
   void initTemplates(char* templatesPath)
   {
     DIR *dir;
     struct dirent *ent;
     if ((dir = opendir (templatesPath)) != NULL) 
     {
+      // an array of original reference images in dlib image format
       dlib::array<array2d<unsigned char>> face_chips(REF_SIZE);
-      /* print all the files and directories within directory */
+      // print all the files within directory
       while ((ent = readdir (dir)) != NULL) 
       {
         //printf ("%s\n", ent->d_name);
@@ -105,14 +117,16 @@ public:
         unsigned long index = ent->d_name[0] - '0'; // index of reference image
         cv::Mat matImg = cv::imread(ent->d_name, 0); // grayscale
         cv_image<unsigned char> cimg(matImg);
-        assign_image(face_chips[index], cimg);
-        pyramid_up(face_chips[index]);
+        assign_image(face_chips[index], cimg); // copies image: EXPENSIVE
+        pyramid_up(face_chips[index]); // up sample
         std::vector<rectangle> faces = detector_(face_chips[index]);
-        if(faces.size() == 0) {
+        if(faces.size() == 0) 
+        {
           ROS_ERROR("no faces detected for %s!!!\n", ent->d_name);
           continue;
         }
-        else {
+        else 
+        {
           ROS_INFO("Number of faces detected: %d for %s\n", faces.size(), ent->d_name);
         }
         
@@ -121,7 +135,7 @@ public:
         templates_[index] = shape;
       }
       closedir (dir);
-      // draw each reference image
+      // draw each reference image with overlays
       /*for (unsigned long i = 0; i < face_chips.size(); ++i)
       {
         for (unsigned long j = 1; j < templates_[i].num_parts(); ++j)
@@ -139,15 +153,23 @@ public:
     }
   }
 
+  /****************************************************************************
+   * Function: computeExpression
+   * Parameters: shape - 68-landmark shape of the closest face
+   * depth_ - depth from camera to the nose tip of the closest face in mm
+   * Description: Computes user facial features such as distance between brows
+   * and computes thresholds from neutral shape, then classifies the feature
+   * divergence into 6 levels of intensity, from disgust to laugh. 
+   * Returns: An int score indicating expression, between [0, 5].
+   ***************************************************************************/
   int computeExpression(full_object_detection shape, float depth_)
   {
     // user's features
     int midLipDist_ = abs(shape.part(62).y() - shape.part(66).y());
     int innerBrowDist_ = abs(shape.part(21).x() - shape.part(22).x());
     int lipCornerDist_ = abs(shape.part(48).x() - shape.part(54).x());
-    //ROS_INFO("mid lip difference: %d", midLipDist_);
     depth_ /= 1000; // depth in m
-    ROS_INFO("depth: %.3f\n", depth_);
+    //ROS_INFO("depth: %.3f\n", depth_);
     // compute thresholds from neutral shape's features
     float midLipDist_thres = 10/depth_;
     float innerBrowDist_thres = abs(neutralShape_->part(21).x() - neutralShape_->part(22).x())/(2*depth_);
@@ -175,12 +197,28 @@ public:
     return 2; // neutral
   }
 
+  /****************************************************************************
+   * Function: imageCb
+   * Parameters: msg - RGB ROS image message
+   *             depth_msg - depth ROS image message
+   * Description: Synchronized callback function for camera node's RGB and 
+   * depth subscribers, since these topics publish at different rates with 
+   * different timestamps. All the perception work is done here. Detects a 
+   * single closest face, extracts landmark shape from it, and calls 
+   * computeExpression() and publishes an expression score during an 
+   * interaction. If a new user is detected, indicated by setting the 
+   * interaction_ flag to 1, then get a new neutral shape from a detected 
+   * face for computing neutral divergence. 
+   * Returns: Nothing, but shows a window of the evaluated face with feature
+   * overlays. 
+   ***************************************************************************/
   void imageCb(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::ImageConstPtr& depth_msg)
   {
     cv_bridge::CvImagePtr cv_ptr;
     cv_bridge::CvImagePtr depth_ptr;
     try
     {
+      // convert from ROS image messages to OpenCV images of type cv::Mat
       cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
       depth_ptr = cv_bridge::toCvCopy(depth_msg, sensor_msgs::image_encodings::TYPE_16UC1);
     }
@@ -195,11 +233,11 @@ public:
       cv_image<bgr_pixel> cimg(cv_ptr->image); // dlib wrapper for cv::Mat object
       //cv_image<unsigned short> dimg(depth_ptr->image);
       std::vector<rectangle> faces = detector_(cimg); // detected bounding boxes
-      std::vector<full_object_detection> shapes; // pose of each face
-      int min_depth_ = INT_MAX;
-      for (unsigned long j = 0; j < faces.size(); ++j)
+      std::vector<full_object_detection> shapes; // vector of shape objects for each face
+      int min_depth_ = INT_MAX; // depth of closest face so far
+      for (unsigned long j = 0; j < faces.size(); ++j) // find closest detected face
       {
-        // shape predictor generates 68 facial landmarks (iBUG 300-W scheme)
+        // shape predictor generates 68 facial landmarks (iBUG 300-W scheme) for face j
         full_object_detection shape = sp_(cimg, faces[j]);
         unsigned short val = (depth_ptr->image).at<unsigned short>(shape.part(30).y(), shape.part(30).x());
         if(val == 0)
@@ -231,27 +269,14 @@ public:
 //        dlib::draw_solid_circle(cimg, shape.part(30), 5, dlib::bgr_pixel(0,0,255)); //nose tip
 //        dlib::draw_solid_circle(cimg, shape.part(21), 5, dlib::bgr_pixel(0,0,255)); //left brow: inner
 //        dlib::draw_solid_circle(cimg, shape.part(22), 5, dlib::bgr_pixel(0,0,255)); //right brow: inner
-        //templates_.push_back(shape);
-        //save_png(cimg, to_string(countTime)+"_org.png");
-        // draw overlay on cimg
-        /*for (unsigned long i = 1; i < shape.num_parts(); ++i)
-        {
-          dlib::draw_line(cimg, shape.part(i-1), shape.part(i), dlib::bgr_pixel(0,255,0));
-        }*/
-        //std::ostream fout(to_string(countTime) + ".dat", std::ios::binary);
-        //save_png(cimg, to_string(countTime)+".png");
-        //countTime++;
-        //dlib::serialize(shape, fout);
-        //fout.close();
       }
       std_msgs::Int8 expression_;
-      expression_.data = -1;
-      if(interaction_ == 1) // calibrate user's neutral face
+      expression_.data = -1; // default value for publishing
+      if(interaction_ == 1) // save new user's neutral face
       {
         ROS_INFO("\nPlease maintain a neutral expression and look at the screen.\n");
         if(!shapes.empty())
         {
-          ROS_INFO("getting neutral shape\n");
           if(neutralShape_ != NULL)
           {
             delete neutralShape_;
@@ -259,22 +284,30 @@ public:
           }
           neutralShape_ = new full_object_detection();
           *neutralShape_ = shapes.at(0);
-          ROS_INFO("got neutral shape!\n");
           interaction_ = 0;
-          ROS_INFO("interaction value is now: %d\n", interaction_);
         }
       }
-      else if(!shapes.empty() && neutralShape_ != NULL)
+      else if(!shapes.empty() && neutralShape_ != NULL) // continually compute score
       {
         expression_.data = computeExpression(shapes[0], min_depth_);
-        ROS_INFO("expression %d\n", expression_.data);
+        //ROS_INFO("expression %d\n", expression_.data);
       }
-      expression_pub_.publish(expression_);
+      expression_pub_.publish(expression_); // publish a score no matter what
+     
+      // uncomment below to save images with overlays as png files
+      /*save_png(cimg, to_string(countTime)+"_orig.png");
+      // draw overlay on cimg
+      for (unsigned long i = 1; i < shape.num_parts(); ++i)
+      {
+        dlib::draw_line(cimg, shape.part(i-1), shape.part(i), dlib::bgr_pixel(0,255,0));
+      }
+      save_png(cimg, to_string(countTime)+".png");
+      countTime++;*/
       //cv_ptr->image = toMat(cimg); // converts dlib image back to cv::Mat
       win_.clear_overlay();
       win_.set_image(cimg);
       //win_.set_image(dimg);
-      // convert into contour overlays for visualizations
+      // convert into contour overlays for visualization
       win_.add_overlay(render_face_detections(shapes));
     }
     catch (exception& e)
@@ -286,19 +319,24 @@ public:
     // Update GUI Window
     //cv::imshow(OPENCV_WINDOW, depth_ptr->image);
     //cv::waitKey(1);
-    
-    // Output modified video stream
-    //image_pub_.publish(cv_ptr->toImageMsg());
   }
 
+  /****************************************************************************
+   * Function: interactionCb
+   * Parameters: newUserFlag - Int8 ROS message from sound_play node, 0 or 1 
+   * indicating if a new user is detected
+   * Description: Callback function for interaction subscriber. As soon as a 1
+   * is detected, preserve it in interaction_ flag, and we'll set it back to 0
+   * ourselves once a neutral shape has been obtained. 
+   * Returns: Nothing.
+   ***************************************************************************/
   void interactionCb(const std_msgs::Int8& newUserFlag)
   {
-    if(newUserFlag.data == 1)
+    if(newUserFlag.data == 1) // new user detected
     {
-      interaction_ = newUserFlag.data;
+      interaction_ = newUserFlag.data; // preserve it so that 0 doesn't overwrite
       ROS_INFO("interaction value is now: %d\n", interaction_);
     }
-    ROS_INFO("received from subscribe: %d\n", newUserFlag.data);
   }
 };
 
@@ -309,7 +347,7 @@ int main(int argc, char** argv)
     ROS_ERROR("\nUsage: rosrun face_evaluator face_evaluator_node /path/shape_predictor_68_face_landmarks.dat\n");
     return 0;
   }
-  deserialize(argv[1]) >> sp_;
+  deserialize(argv[1]) >> sp_; // initialize shape predictor
   ros::init(argc, argv, "image_converter");
   ImageConverter ic;
   //ic.initTemplates(argv[2]);
