@@ -32,7 +32,7 @@ def listener_callback(data):
 
 #callback function for face evaluator
 def callback(data):
-    rospy.loginfo('%d', data.data)
+    rospy.loginfo('face_evaluator: %d', data.data)
     aveResponse.append(data.data)
 
 # Asking the target if he/she want to hear a joke
@@ -65,6 +65,7 @@ class Start(smach.State):
 	    while new_pub.get_num_connections() < 1 :
 		rospy.sleep(1)
 		rospy.loginfo('num_connections: %d', new_pub.get_num_connections())
+	    rospy.sleep(5)
             return 'outcome1'
         else:
 	    ans = ''
