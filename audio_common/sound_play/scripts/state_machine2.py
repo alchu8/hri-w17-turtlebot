@@ -119,7 +119,7 @@ class Happy(smach.State):
 	self.cmd_vel_pub.publish(self.move_cmd)
 
 	# Load happy image on screen for avatar.
-	webbrowser.open('home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/happy.png')
+	webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/happy.png')
 
 	return 'outcome1'
 
