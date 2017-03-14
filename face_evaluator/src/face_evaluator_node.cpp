@@ -84,6 +84,7 @@ public:
     delete my_sync_;
     delete rgb_sub_;
     delete depth_sub_;
+//    delete neutralShape_;
   }
 
   void initTemplates(char* templatesPath)
@@ -146,7 +147,7 @@ public:
     int lipCornerDist_ = abs(shape.part(48).x() - shape.part(54).x());
     //ROS_INFO("mid lip difference: %d", midLipDist_);
     depth_ /= 1000; // depth in m
-    //ROS_INFO("depth: %.3f\n", depth_);
+    ROS_INFO("depth: %.3f\n", depth_);
     // compute thresholds from neutral shape's features
     float midLipDist_thres = 10/depth_;
     float innerBrowDist_thres = abs(neutralShape_->part(21).x() - neutralShape_->part(22).x())/(2*depth_);
@@ -244,13 +245,21 @@ public:
         //fout.close();
       }
       std_msgs::Int8 expression_;
-      expression_.data = 0;
+      expression_.data = -1;
       if(interaction_ == 1) // calibrate user's neutral face
       {
         ROS_INFO("\nPlease maintain a neutral expression and look at the screen.\n");
         if(!shapes.empty())
         {
-          *neutralShape_ = shapes[0];
+          ROS_INFO("getting neutral shape\n");
+          if(neutralShape_ != NULL)
+          {
+            delete neutralShape_;
+            neutralShape_ = NULL;
+          }
+          neutralShape_ = new full_object_detection();
+          *neutralShape_ = shapes.at(0);
+          ROS_INFO("got neutral shape!\n");
           interaction_ = 0;
           ROS_INFO("interaction value is now: %d\n", interaction_);
         }
@@ -289,6 +298,7 @@ public:
       interaction_ = newUserFlag.data;
       ROS_INFO("interaction value is now: %d\n", interaction_);
     }
+    ROS_INFO("received from subscribe: %d\n", newUserFlag.data);
   }
 };
 
