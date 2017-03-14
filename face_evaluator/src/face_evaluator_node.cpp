@@ -6,7 +6,8 @@
  * based on the degree of difference between the current frame and a reference 
  * frame with neutral expression. This node subscribes to RGB and depth from 
  * the camera node; it also subscribes to interaction information from 
- * sound_play node. Finally, it publishes an expression score. 
+ * sound_play node. Finally, it publishes an expression score and saves them
+ * in a file. 
  *****************************************************************************/
 #define DLIB_PNG_SUPPORT
 #include <ros/ros.h>
@@ -76,8 +77,8 @@ public:
     my_sync_->registerCallback(boost::bind(&ImageConverter::imageCb, this, _1, _2));
     // subscribe to detect new user and publish expression score
     expression_pub_ = nh_.advertise<std_msgs::Int8>("/face_evaluator/expression", 1);
-    interaction_sub_ = nh_.subscribe("/new_person", 10, &ImageConverter::interactionCb, this);
-    interaction_ = 0;
+    //interaction_sub_ = nh_.subscribe("/new_person", 10, &ImageConverter::interactionCb, this);
+    interaction_ = 1; // on startup, user is new
     neutralShape_ = NULL;
     interactionId = 0;
 
@@ -182,7 +183,7 @@ public:
     {
       return 0; // shock/disgust
     }
-    else if(innerBrowDist_ <= innerBrowDist_thres || lipCornerDist_ < lipCornerDist_thres)
+    else if(innerBrowDist_ <= innerBrowDist_thres || lipCornerDist_ < lipCornerDist_thres/2)
     {
       return 1; // frown/pouted lips
     }
