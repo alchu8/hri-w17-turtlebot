@@ -161,11 +161,15 @@ public:
     }
     else if(midLipDist_ > midLipDist_thres)
     {
-      return 4; // laugh
+      return 5; // laugh
     }
     else if(midLipDist_ > midLipDist_thres/2 && midLipDist_ <= midLipDist_thres)
     {
-      return 3; // teeth smile
+      return 4; // teeth smile
+    }
+    else if(lipCornerDist_ > lipCornerDist_thres)
+    {
+      return 3; // lip smile
     }
     return 2; // neutral
   }
