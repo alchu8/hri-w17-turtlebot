@@ -71,7 +71,7 @@ public:
       &ImageConverter::imageCb, this);
     image_pub_ = it_.advertise("/image_converter/output_video", 1);*/
     expression_pub_ = nh_.advertise<std_msgs::Int8>("/face_evaluator/expression", 1);
-    interaction_sub_ = nh_.subscribe("/new_person", 1, &ImageConverter::interactionCb, this);
+    interaction_sub_ = nh_.subscribe("/new_person", 10, &ImageConverter::interactionCb, this);
     interaction_ = 0;
     neutralShape_ = NULL;
 
@@ -239,21 +239,24 @@ public:
         //dlib::serialize(shape, fout);
         //fout.close();
       }
+      std_msgs::Int8 expression_;
+      expression_.data = 0;
       if(interaction_ == 1) // calibrate user's neutral face
       {
         ROS_INFO("\nPlease maintain a neutral expression and look at the screen.\n");
         if(!shapes.empty())
         {
           *neutralShape_ = shapes[0];
+          interaction_ = 0;
+          ROS_INFO("interaction value is now: %d\n", interaction_);
         }
       }
       else if(!shapes.empty() && neutralShape_ != NULL)
       {
-        std_msgs::Int8 expression_;
         expression_.data = computeExpression(shapes[0], min_depth_);
         ROS_INFO("expression %d\n", expression_.data);
-        expression_pub_.publish(expression_);
       }
+      expression_pub_.publish(expression_);
       //cv_ptr->image = toMat(cimg); // converts dlib image back to cv::Mat
       win_.clear_overlay();
       win_.set_image(cimg);
@@ -277,8 +280,11 @@ public:
 
   void interactionCb(const std_msgs::Int8& newUserFlag)
   {
-    interaction_ = newUserFlag.data;
-    ROS_INFO("interaction value is now: %d\n", interaction_);
+    if(newUserFlag.data == 1)
+    {
+      interaction_ = newUserFlag.data;
+      ROS_INFO("interaction value is now: %d\n", interaction_);
+    }
   }
 };
 
