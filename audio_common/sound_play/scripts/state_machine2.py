@@ -91,7 +91,7 @@ class TellJokes(smach.State):
 	sub.unregister()
         rospy.loginfo('Executing state TellJokes')
 	rospy.loginfo('length: %d', len(aveResponse))
-	if sum(aveResponse)*1.0/len(aveResponse) > 1:
+	if sum(aveResponse)*1.0/len(aveResponse) > 2:
 	    aveResponse = []
             return 'happy'
 	else:
