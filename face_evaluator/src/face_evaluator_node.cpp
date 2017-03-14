@@ -182,9 +182,9 @@ public:
     {
       return 0; // shock/disgust
     }
-    else if(innerBrowDist_ <= innerBrowDist_thres)
+    else if(innerBrowDist_ <= innerBrowDist_thres || lipCornerDist_ < lipCornerDist_thres)
     {
-      return 1; // frown
+      return 1; // frown/pouted lips
     }
     else if(midLipDist_ > midLipDist_thres)
     {
@@ -290,16 +290,16 @@ public:
           neutralShape_ = new full_object_detection();
           *neutralShape_ = shapes.at(0);
           interaction_ = 0;
-          outFile.open("~/interaction"+to_string(interactionId++)+".txt");
+          outFile.open("/home/turtlebot/interactions/interaction"+to_string(interactionId++)+".txt");
         }
       }
       else if(!shapes.empty() && neutralShape_ != NULL) // continually compute score
       {
         expression_.data = computeExpression(shapes[0], min_depth_);
+        outFile << to_string(expression_.data) + " ";
         //ROS_INFO("expression %d\n", expression_.data);
       }
       expression_pub_.publish(expression_); // publish a score no matter what
-      outFile << to_string(expression_.data) + " ";
      
       // uncomment below to save images with overlays as png files
       /*save_png(cimg, to_string(countTime)+"_orig.png");
@@ -342,7 +342,6 @@ public:
     if(newUserFlag.data == 1) // new user detected
     {
       interaction_ = newUserFlag.data; // preserve it so that 0 doesn't overwrite
-      ROS_INFO("interaction value is now: %d\n", interaction_);
     }
   }
 };
