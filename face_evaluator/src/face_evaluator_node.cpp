@@ -30,6 +30,7 @@
 #include <dlib/image_io.h>
 #include <dlib/opencv.h>
 #include <iostream>
+#include <fstream>
 #include <dirent.h>
 #include <cmath>
 
@@ -58,6 +59,8 @@ class ImageConverter
   std::vector<full_object_detection> templates_; // basis set
   int interaction_; // flag for new user, 1 or 0
   full_object_detection *neutralShape_; // reference shape for each interaction user
+  ofstream outFile;
+  int interactionId; // counter for out file name
   //int countTime;
   
 public:
@@ -76,6 +79,7 @@ public:
     interaction_sub_ = nh_.subscribe("/new_person", 10, &ImageConverter::interactionCb, this);
     interaction_ = 0;
     neutralShape_ = NULL;
+    interactionId = 0;
 
     //cv::namedWindow(OPENCV_WINDOW);
   }
@@ -281,10 +285,12 @@ public:
           {
             delete neutralShape_;
             neutralShape_ = NULL;
+            outFile.close();
           }
           neutralShape_ = new full_object_detection();
           *neutralShape_ = shapes.at(0);
           interaction_ = 0;
+          outFile.open("~/interaction"+to_string(interactionId++)+".txt");
         }
       }
       else if(!shapes.empty() && neutralShape_ != NULL) // continually compute score
@@ -293,6 +299,7 @@ public:
         //ROS_INFO("expression %d\n", expression_.data);
       }
       expression_pub_.publish(expression_); // publish a score no matter what
+      outFile << to_string(expression_.data) + " ";
      
       // uncomment below to save images with overlays as png files
       /*save_png(cimg, to_string(countTime)+"_orig.png");
