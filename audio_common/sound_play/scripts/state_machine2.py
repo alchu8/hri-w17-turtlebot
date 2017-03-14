@@ -110,16 +110,17 @@ class Happy(smach.State):
 	global msg
 	msg.data = 0
 	rospy.loginfo('Executing state Happy')
-	while self.count < self.THRES:
+
+    # Load happy image on screen for avatar.
+    webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/happy.png')
+
+    while self.count < self.THRES:
 	    rospy.loginfo('count = %d',self.count)
 	    self.count += 1
 	    self.move_cmd.angular.z = 1
 	    self.cmd_vel_pub.publish(self.move_cmd)
 	self.move_cmd.angular.z = 0
 	self.cmd_vel_pub.publish(self.move_cmd)
-
-	# Load happy image on screen for avatar.
-	webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/happy.png')
 
 	return 'outcome1'
 
@@ -137,6 +138,9 @@ class Sad(smach.State):
 
         rospy.loginfo('Executing state Sad')
 
+    # Load sad image on screen for avatar.
+    webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/sad.png')
+
 #        while self.count < self.THRES:
 #            rospy.loginfo('count = %d',self.count)
 #            self.count += 1
@@ -145,9 +149,6 @@ class Sad(smach.State):
 
         self.move_cmd.angular.z = 0
         self.cmd_vel_pub.publish(self.move_cmd)
-
-	# Load sad image on screen for avatar.
-	webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/sad.png')
 
 	return 'outcome1'
 
