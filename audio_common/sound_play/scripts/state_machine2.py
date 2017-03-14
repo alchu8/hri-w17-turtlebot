@@ -46,8 +46,9 @@ class Start(smach.State):
 
         rospy.loginfo('Executing state Start')
 	rospy.loginfo('ans before asking: %s', ans)
-	rospy.loginfo('would you like to hear a joke?')
-
+#	rospy.loginfo('would you like to hear a joke?')
+	speak.welcome()
+	rospy.sleep(3)
 	#subscribe to speech recognizer
 	listener = rospy.Subscriber("/recognizer/output", String, listener_callback)
 	rospy.loginfo('hear a joke? %s', ans)

@@ -23,3 +23,12 @@ def speak_func():
 	rospy.sleep(1)
 	return len(s.split())
 
+def welcome():
+	soundhandle1 = SoundClient()
+	rospy.sleep(1)
+	voice = 'voice_kal_diphone'
+	volume = 100.0
+	s = "Do you want to hear a joke?"
+	soundhandle1.say(s,voice)
+	rospy.sleep(1)
+	
