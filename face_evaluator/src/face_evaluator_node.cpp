@@ -46,9 +46,12 @@ class ImageConverter
   message_filters::Subscriber<Image> *depth_sub_;
   message_filters::Synchronizer<MySyncPolicy>* my_sync_;
   ros::Publisher expression_pub_;
+  ros::Subscriber interaction_sub_;
   frontal_face_detector detector_;
   image_window win_;
   std::vector<full_object_detection> templates_; // basis set
+  int interaction_;
+  full_object_detection *neutralShape_;
   //int countTime;
   
 public:
@@ -68,6 +71,9 @@ public:
       &ImageConverter::imageCb, this);
     image_pub_ = it_.advertise("/image_converter/output_video", 1);*/
     expression_pub_ = nh_.advertise<std_msgs::Int8>("/face_evaluator/expression", 1);
+    interaction_sub_ = nh_.subscribe("/new_person", 1, &ImageConverter::interactionCb, this);
+    interaction_ = 0;
+    neutralShape_ = NULL;
 
     //cv::namedWindow(OPENCV_WINDOW);
   }
@@ -134,14 +140,17 @@ public:
 
   int computeExpression(full_object_detection shape, float depth_)
   {
+    // user's features
     int midLipDist_ = abs(shape.part(62).y() - shape.part(66).y());
     int innerBrowDist_ = abs(shape.part(21).x() - shape.part(22).x());
     int lipCornerDist_ = abs(shape.part(48).x() - shape.part(54).x());
     //ROS_INFO("mid lip difference: %d", midLipDist_);
     depth_ /= 1000; // depth in m
-    ROS_INFO("depth: %.3f\n", depth_);
+    //ROS_INFO("depth: %.3f\n", depth_);
+    // compute thresholds from neutral shape's features
     float midLipDist_thres = 10/depth_;
-    float innerBrowDist_thres = 8.5/depth_;
+    float innerBrowDist_thres = abs(neutralShape_->part(21).x() - neutralShape_->part(22).x())/(2*depth_);
+    float lipCornerDist_thres = abs(neutralShape_->part(48).x() - neutralShape_->part(54).x())/(2*depth_);
     if(innerBrowDist_ <= innerBrowDist_thres && midLipDist_ > midLipDist_thres)
     {
       return 0; // shock/disgust
@@ -230,7 +239,15 @@ public:
         //dlib::serialize(shape, fout);
         //fout.close();
       }
-      if(!shapes.empty())
+      if(interaction_ == 1) // calibrate user's neutral face
+      {
+        ROS_INFO("\nPlease maintain a neutral expression and look at the screen.\n");
+        if(!shapes.empty())
+        {
+          *neutralShape_ = shapes[0];
+        }
+      }
+      else if(!shapes.empty() && neutralShape_ != NULL)
       {
         std_msgs::Int8 expression_;
         expression_.data = computeExpression(shapes[0], min_depth_);
@@ -256,6 +273,12 @@ public:
     
     // Output modified video stream
     //image_pub_.publish(cv_ptr->toImageMsg());
+  }
+
+  void interactionCb(const std_msgs::Int8& newUserFlag)
+  {
+    interaction_ = newUserFlag.data;
+    ROS_INFO("interaction value is now: %d\n", interaction_);
   }
 };
 
