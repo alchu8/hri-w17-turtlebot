@@ -4,10 +4,10 @@
  * Email: alchu8@gmail.com
  * Description: This node detects a face and evaluates an expression score 
  * based on the degree of difference between the current frame and a reference 
- * frame with neutral expression. This node subscribes to RGB and depth from 
- * the camera node; it also subscribes to interaction information from 
- * sound_play node. Finally, it publishes an expression score and saves them
- * in a file. 
+ * frame with neutral expression, an approach called neutral divergence. 
+ * This node subscribes to RGB and depth from the camera node; it also 
+ * subscribes to interaction information from sound_play node. Finally, it 
+ * publishes an expression score for each frame and saves them in a file. 
  *****************************************************************************/
 #define DLIB_PNG_SUPPORT
 #include <ros/ros.h>
@@ -77,8 +77,8 @@ public:
     my_sync_->registerCallback(boost::bind(&ImageConverter::imageCb, this, _1, _2));
     // subscribe to detect new user and publish expression score
     expression_pub_ = nh_.advertise<std_msgs::Int8>("/face_evaluator/expression", 1);
-    //interaction_sub_ = nh_.subscribe("/new_person", 10, &ImageConverter::interactionCb, this);
-    interaction_ = 1; // on startup, user is new
+    interaction_sub_ = nh_.subscribe("/new_person", 10, &ImageConverter::interactionCb, this);
+    interaction_ = 0;
     neutralShape_ = NULL;
     interactionId = 0;
 
@@ -143,14 +143,11 @@ public:
       // draw each reference image with overlays
       /*for (unsigned long i = 0; i < face_chips.size(); ++i)
       {
-        for (unsigned long j = 1; j < templates_[i].num_parts(); ++j)
-        {
-          dlib::draw_line(face_chips[i], templates_[i].part(j-1), templates_[i].part(j), dlib::bgr_pixel(0,255,0));
-        }
+        drawOverlays(&face_chips[i], templates_[i]);
       }
       image_window win_faces;
       win_faces.set_image(tile_images(face_chips));
-      save_png(tile_images(face_chips), "~/references.png");*/
+      save_png(tile_images(face_chips), "/home/turtlebot/references.png");*/
     } 
     else 
     {
@@ -173,21 +170,23 @@ public:
     int midLipDist_ = abs(shape.part(62).y() - shape.part(66).y());
     int innerBrowDist_ = abs(shape.part(21).x() - shape.part(22).x());
     int lipCornerDist_ = abs(shape.part(48).x() - shape.part(54).x());
+    int jawUpperLipDist_ = abs(shape.part(8).y() - shape.part(62).y());
     depth_ /= 1000; // depth in m
     //ROS_INFO("depth: %.3f\n", depth_);
     // compute thresholds from neutral shape's features
-    float midLipDist_thres = 10/depth_;
-    float innerBrowDist_thres = abs(neutralShape_->part(21).x() - neutralShape_->part(22).x())/(2*depth_);
-    float lipCornerDist_thres = abs(neutralShape_->part(48).x() - neutralShape_->part(54).x())/(2*depth_);
-    if(innerBrowDist_ <= innerBrowDist_thres && midLipDist_ > midLipDist_thres)
+    float midLipDist_thres = 8.5/depth_;
+    float innerBrowDist_thres = 0.85*abs(neutralShape_->part(21).x() - neutralShape_->part(22).x())/(2*depth_);
+    float lipCornerDist_thres = 1.1*abs(neutralShape_->part(48).x() - neutralShape_->part(54).x())/(2*depth_);
+    float jawUpperLipDist_thres = 1.1*abs(neutralShape_->part(8).y() - neutralShape_->part(62).y())/(2*depth_);
+    if(innerBrowDist_ <= innerBrowDist_thres && (midLipDist_ > midLipDist_thres || jawUpperLipDist_ > jawUpperLipDist_thres))
     {
       return 0; // shock/disgust
     }
-    else if(innerBrowDist_ <= innerBrowDist_thres || lipCornerDist_ < lipCornerDist_thres/2)
+    else if(innerBrowDist_ <= innerBrowDist_thres)
     {
-      return 1; // frown/pouted lips
+      return 1; // frown
     }
-    else if(midLipDist_ > midLipDist_thres)
+    else if(midLipDist_ > midLipDist_thres && lipCornerDist_ > lipCornerDist_thres)
     {
       return 5; // laugh
     }
@@ -274,6 +273,7 @@ public:
 //        dlib::draw_solid_circle(cimg, shape.part(30), 5, dlib::bgr_pixel(0,0,255)); //nose tip
 //        dlib::draw_solid_circle(cimg, shape.part(21), 5, dlib::bgr_pixel(0,0,255)); //left brow: inner
 //        dlib::draw_solid_circle(cimg, shape.part(22), 5, dlib::bgr_pixel(0,0,255)); //right brow: inner
+//        dlib::draw_solid_circle(cimg, shape.part(8), 5, dlib::bgr_pixel(0,0,255)); //lower jaw: center
       }
       std_msgs::Int8 expression_;
       expression_.data = -1; // default value for publishing
@@ -290,6 +290,9 @@ public:
           }
           neutralShape_ = new full_object_detection();
           *neutralShape_ = shapes.at(0);
+          //drawOverlays(&cimg, *neutralShape_);
+          //cv::imshow(OPENCV_WINDOW, toMat(cimg));
+          //cv::waitKey(0);
           interaction_ = 0;
           outFile.open("/home/turtlebot/interactions/interaction"+to_string(interactionId++)+".txt");
         }
@@ -305,10 +308,7 @@ public:
       // uncomment below to save images with overlays as png files
       /*save_png(cimg, to_string(countTime)+"_orig.png");
       // draw overlay on cimg
-      for (unsigned long i = 1; i < shape.num_parts(); ++i)
-      {
-        dlib::draw_line(cimg, shape.part(i-1), shape.part(i), dlib::bgr_pixel(0,255,0));
-      }
+      drawOverlays(&cimg, shapes[0]);
       save_png(cimg, to_string(countTime)+".png");
       countTime++;*/
       //cv_ptr->image = toMat(cimg); // converts dlib image back to cv::Mat
@@ -340,10 +340,59 @@ public:
    ***************************************************************************/
   void interactionCb(const std_msgs::Int8& newUserFlag)
   {
-    if(newUserFlag.data == 1) // new user detected
-    {
-      interaction_ = newUserFlag.data; // preserve it so that 0 doesn't overwrite
-    }
+      interaction_ = interaction_ | newUserFlag.data; // so 0 doesn't overwrite
+  }
+
+  /****************************************************************************
+   * Function: drawOverlays
+   * Parameters: cimg - pointer to the current RGB frame on which to draw
+   *             d - reference to shape object of detected face
+   * Description: Code obtained from Davis E. King from dlib.net.
+   * Draws overlay lines onto cimg, connecting the points provided in shape d.
+   * Returns: Nothing.
+   ***************************************************************************/
+  void drawOverlays(cv_image<bgr_pixel>* cimg, const full_object_detection& d)
+  {
+    const dlib::bgr_pixel color = dlib::bgr_pixel(0,255,0);
+    for (unsigned long i = 1; i <= 16; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+
+    // Line on top of nose
+    for (unsigned long i = 28; i <= 30; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+
+    // left eyebrow
+    for (unsigned long i = 18; i <= 21; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+    // Right eyebrow
+    for (unsigned long i = 23; i <= 26; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+    // Bottom part of the nose
+    for (unsigned long i = 31; i <= 35; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+    // Line from the nose to the bottom part above
+    dlib::draw_line(*cimg, d.part(30), d.part(35), color);
+
+    // Left eye
+    for (unsigned long i = 37; i <= 41; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+    dlib::draw_line(*cimg, d.part(36), d.part(41), color);
+
+    // Right eye
+    for (unsigned long i = 43; i <= 47; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+    dlib::draw_line(*cimg, d.part(42), d.part(47), color);
+
+    // Lips outer part
+    for (unsigned long i = 49; i <= 59; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+    dlib::draw_line(*cimg, d.part(48), d.part(59), color);
+
+    // Lips inside part
+    for (unsigned long i = 61; i <= 67; ++i)
+      dlib::draw_line(*cimg, d.part(i), d.part(i-1), color);
+    dlib::draw_line(*cimg, d.part(60), d.part(67), color);
+
   }
 };
 
