@@ -93,13 +93,15 @@ class TellJokes(smach.State):
 	#subscribe to face evaluator
 	sub = rospy.Subscriber("face_evaluator/expression", Int8, callback)
 	#wait until the joke is finished
-	rospy.sleep(joke_length)
+	rospy.sleep(joke_length*0.8)
 	#no need to subscribe anymore
 	sub.unregister()
         rospy.loginfo('Executing state TellJokes')
-	rospy.loginfo('length: %d', len(aveResponse))
+        rospy.loginfo(aveResponse)
+        m = mode(aveResponse)
+	rospy.loginfo(m)
 	#if sum(aveResponse)*1.0/len(aveResponse) > 2:
-        if mode(aveResponse) > 2:
+        if m.mode[0] > 2:
 	    aveResponse = [None]*10
             return 'happy'
 	else:
@@ -119,14 +121,16 @@ class Happy(smach.State):
 	msg.data = 0
 	rospy.loginfo('Executing state Happy')
 
-    # Load happy image on screen for avatar.
-    webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/happy.png')
+        # Load happy image on screen for avatar.
+        webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/happy.png')
 
-    while self.count < self.THRES:
-	    rospy.loginfo('count = %d',self.count)
+        while self.count < self.THRES:
+	    #rospy.loginfo('count = %d',self.count)
 	    self.count += 1
 	    self.move_cmd.angular.z = 1
 	    self.cmd_vel_pub.publish(self.move_cmd)
+
+        self.count = 0
 	self.move_cmd.angular.z = 0
 	self.cmd_vel_pub.publish(self.move_cmd)
 
@@ -146,15 +150,16 @@ class Sad(smach.State):
 
         rospy.loginfo('Executing state Sad')
 
-    # Load sad image on screen for avatar.
-    webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/sad.png')
+        # Load sad image on screen for avatar.
+        webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/sad.png')
 
-#        while self.count < self.THRES:
-#            rospy.loginfo('count = %d',self.count)
-#            self.count += 1
-#            self.move_cmd.angular.z = 0.5
-#            self.cmd_vel_pub.publish(self.move_cmd)
+        while self.count < self.THRES:
+            #rospy.loginfo('count = %d',self.count)
+            self.count += 1
+            self.move_cmd.angular.z = 0.5
+            self.cmd_vel_pub.publish(self.move_cmd)
 
+        self.count = 0
         self.move_cmd.angular.z = 0
         self.cmd_vel_pub.publish(self.move_cmd)
 
