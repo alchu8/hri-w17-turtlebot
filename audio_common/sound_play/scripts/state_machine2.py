@@ -12,9 +12,11 @@ from geometry_msgs.msg import Twist
 #import Image
 import webbrowser
 from sensor_msgs.msg import Image
+from scipy.stats import mode
 
-# store the response score when a user is hearing a joke
-aveResponse = []
+# store the last 10 response scores when a user is hearing a joke
+aveResponse = [None]*10
+responseCounter = 0
 ans = ''
 # publish 1 when there's a new user, otherwise 0
 new_pub = rospy.Publisher("new_person", Int8, queue_size=10)
@@ -32,8 +34,12 @@ def listener_callback(data):
 
 #callback function for face evaluator
 def callback(data):
+    global responseCounter
+    global aveResponse
     rospy.loginfo('face_evaluator: %d', data.data)
-    aveResponse.append(data.data)
+    #aveResponse.append(data.data)
+    aveResponse[responseCounter] = data.data
+    responseCounter = (responseCounter + 1) % 10
 
 # Asking the target if he/she want to hear a joke
 class Start(smach.State):
@@ -60,6 +66,7 @@ class Start(smach.State):
         if ans == 'yes' or ans == 'ok':
 	    # When the target answers yes or ok, face evaluator will know there's a person
 	    msg.data = 1
+	    new_pub.publish(msg) # just publish once
 	    rospy.loginfo('%d\n', msg.data)
 	    ans = ''
 	    while new_pub.get_num_connections() < 1 :
@@ -86,16 +93,17 @@ class TellJokes(smach.State):
 	#subscribe to face evaluator
 	sub = rospy.Subscriber("face_evaluator/expression", Int8, callback)
 	#wait until the joke is finished
-	rospy.sleep(joke_length*0.5)
+	rospy.sleep(joke_length)
 	#no need to subscribe anymore
 	sub.unregister()
         rospy.loginfo('Executing state TellJokes')
 	rospy.loginfo('length: %d', len(aveResponse))
-	if sum(aveResponse)*1.0/len(aveResponse) > 2:
-	    aveResponse = []
+	#if sum(aveResponse)*1.0/len(aveResponse) > 2:
+        if mode(aveResponse) > 2:
+	    aveResponse = [None]*10
             return 'happy'
 	else:
-	    aveResponse = []
+	    aveResponse = [None]*10
 	    return 'sad'
 
 class Happy(smach.State):
@@ -159,7 +167,7 @@ def main():
     # the message for face_evaluator to identify a new user
     msg.data = 0
     #subscribe to camera
-    cam_sub = rospy.Subscriber("/camera/rgb/image_raw",Image, cam_callback)
+    #cam_sub = rospy.Subscriber("/camera/rgb/image_raw",Image, cam_callback)
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=['outcome4'])
 

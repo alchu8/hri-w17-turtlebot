@@ -78,7 +78,7 @@ public:
     // subscribe to detect new user and publish expression score
     expression_pub_ = nh_.advertise<std_msgs::Int8>("/face_evaluator/expression", 1);
     interaction_sub_ = nh_.subscribe("/new_person", 10, &ImageConverter::interactionCb, this);
-    interaction_ = 0;
+    interaction_ = 1; // upon startup, user is new
     neutralShape_ = NULL;
     interactionId = 0;
 
