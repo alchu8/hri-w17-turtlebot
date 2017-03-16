@@ -57,7 +57,6 @@ class Start(smach.State):
 	rospy.sleep(3)
 	#subscribe to speech recognizer
 	listener = rospy.Subscriber("/recognizer/output", String, listener_callback)
-	rospy.loginfo('hear a joke? %s', ans)
 	# when no answer is received, stay in this while loop
 	while ans == '':
 	    rospy.sleep(2)
@@ -72,7 +71,6 @@ class Start(smach.State):
 	    while new_pub.get_num_connections() < 1 :
 		rospy.sleep(1)
 		rospy.loginfo('num_connections: %d', new_pub.get_num_connections())
-	    rospy.sleep(5)
             return 'outcome1'
         else:
 	    ans = ''
@@ -120,14 +118,15 @@ class Happy(smach.State):
 	global msg
 	msg.data = 0
 	rospy.loginfo('Executing state Happy')
-
+	speak.play_wav('/home/turtlebot/Downloads/woohoo.wav')
         # Load happy image on screen for avatar.
         webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/happy.png')
+	speak.play_wav('/home/turtlebot/Downloads/september.mp3')
 
         while self.count < self.THRES:
-	    #rospy.loginfo('count = %d',self.count)
+	    rospy.loginfo('count = %d',self.count)
 	    self.count += 1
-	    self.move_cmd.angular.z = 1
+	    self.move_cmd.angular.z = 2
 	    self.cmd_vel_pub.publish(self.move_cmd)
 
         self.count = 0
@@ -147,17 +146,23 @@ class Sad(smach.State):
 	#all states hould send 0 to face evaluator except start
 	global msg
 	msg.data = 0
-
+	speak.play_wav('/home/turtlebot/Downloads/what-2.wav')
         rospy.loginfo('Executing state Sad')
 
         # Load sad image on screen for avatar.
         webbrowser.open('/home/turtlebot/turtlebot_ws/src/hri-w17-turtlebot/audio_common/sound_play/scripts/sad.png')
 
+	speak.play_wav('/home/turtlebot/Downloads/naruto_cutted.mp3')
+
         while self.count < self.THRES:
-            #rospy.loginfo('count = %d',self.count)
+            rospy.loginfo('count = %d',self.count)
             self.count += 1
-            self.move_cmd.angular.z = 0.5
-            self.cmd_vel_pub.publish(self.move_cmd)
+	    if (self.count / 1000)%2 == 0:
+                self.move_cmd.angular.z = 0.5
+                self.cmd_vel_pub.publish(self.move_cmd)
+	    else:
+		self.move_cmd.angular.z = -0.5
+		self.cmd_vel_pub.publish(self.move_cmd)
 
         self.count = 0
         self.move_cmd.angular.z = 0

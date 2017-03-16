@@ -32,3 +32,17 @@ def welcome():
 	soundhandle1.say(s,voice)
 	rospy.sleep(1)
 	
+def speak_whatever(s):
+	soundhandle2 = SoundClient()
+	rospy.sleep(1)
+	voice = 'voice_kal_diphone'
+	volume = 100.0
+	soundhandle2.say(s,voice)
+	rospy.sleep(1)
+
+def play_wav(s):
+	soundhandle3 = SoundClient()
+	rospy.sleep(1)
+	volume = 100.0
+	soundhandle3.playWave(s,volume)
+	rospy.sleep(1)
